@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import Fretboard from '../ui/Fretboard.svelte';
   import Piano from '../ui/Piano.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -12,6 +12,7 @@
   import { scaleInfoOf } from '../core/scales';
   import { pretty } from '../core/notes';
   import { playScaleInfo, scaleFretMarks, scaleKeyMarks } from '../lib/helpers';
+  import { previewScaleOverChord, stopScalePreview } from '../lib/soloDemo';
 
   const song = $derived(app.song);
   const items = $derived(song.sections.flatMap(s => s.chords));
@@ -42,9 +43,38 @@
   const fretMarks = $derived(scale ? scaleFretMarks(scale, chord, guides, windowRange) : new Map());
   const keyMarks = $derived(scale ? scaleKeyMarks(scale, chord, 48, 84) : new Map());
 
+  // Demo solo line over the loop, using each chord's chosen scale and leading into the next chord
+  let soloLine = $state(true);
+  const leadSpec = (i: number) => {
+    const c = items[i];
+    const ch = chosen(i);
+    if (!c || !ch) return null;
+    const next = items[(i + 1) % items.length];
+    return {
+      scale: [...scaleInfoOf(ch.ref).pcs], chord: [...infoOf(c.ref).pcs], guides: guideTones(c.ref),
+      target: items.length > 1 ? guideTones(next.ref) : undefined,
+    };
+  };
+  function startLoop(from = 0) {
+    transport.start(items, song.tempo, from, soloLine ? leadSpec : undefined);
+  }
   function togglePlay() {
     if (transport.playing) transport.stop();
-    else transport.start(items, song.tempo, 0);
+    else startLoop(0);
+  }
+  $effect(() => {
+    // toggling the line while playing restarts the loop with/without it
+    void soloLine;
+    untrack(() => { if (transport.playing) startLoop(Math.max(0, transport.index)); });
+  });
+  let previewing = $state<number | null>(null);
+  function preview(oi: number, o: ScaleChoice) {
+    if (!item) return;
+    transport.stop();
+    previewing = oi;
+    previewScaleOverChord(item.ref, scaleInfoOf(o.ref), song.tempo);
+    const ms = (8 * 60) / Math.max(70, Math.min(150, song.tempo)) * 1000 + 300;
+    setTimeout(() => { if (previewing === oi) previewing = null; }, ms);
   }
   function breakTheBox() {
     const next: Record<string, number> = {};
@@ -65,7 +95,7 @@
     choice = next;
   }
 
-  onDestroy(() => transport.stop());
+  onDestroy(() => { transport.stop(); stopScalePreview(); });
 </script>
 
 <div class="solo">
@@ -73,13 +103,16 @@
     <div>
       <div class="eyebrow">Solo · what to play over the changes</div>
       <h1>{song.title} <span class="muted key">in {keyName(key)}</span></h1>
-      <p class="muted">Loop the song and see the right notes for each chord. Big coloured dots are chord tones, rings are guide tones (3rds & 7ths) — land on them.</p>
+      <p class="muted">Loop the song (with a demo solo line) and see the right notes for each chord. Hit ▶ on any scale to hear it over the chord. Big coloured dots are chord tones, rings are guide tones (3rds & 7ths) — land on them.</p>
     </div>
     <div class="transport">
       <button class="btn" class:primary={!transport.playing} onclick={togglePlay} disabled={!items.length} data-testid="solo-play">
         <Icon name={transport.playing ? 'stop' : 'loop'} size={15} /> {transport.playing ? 'Stop' : 'Loop it'}
       </button>
       <label class="bpm"><input type="number" min="40" max="260" bind:value={song.tempo} aria-label="Tempo" /> bpm</label>
+      <label class="check line" title="A generated solo line over the loop, using the scale you picked for each chord">
+        <input type="checkbox" bind:checked={soloLine} data-testid="solo-line" /> Solo line
+      </label>
       <div class="seg">
         {#each [['strum', 'Strum'], ['comp', 'Jazz'], ['pad', 'Pad']] as [f, l]}
           <button class:on={transport.feel === f} onclick={() => (transport.feel = f as typeof transport.feel)}>{l}</button>
@@ -95,10 +128,10 @@
       <button class="btn primary sm" onclick={() => go('song')}>Go to Song</button>
     </section>
   {:else}
-    <section class="card timeline scroll-x">
+    <section class="card timeline">
       {#each items as c, i (c.id)}
         {@const ch = chosen(i)}
-        <button class="tl" class:cur={i === current} style="flex-grow: {c.beats}" onclick={() => { picked = i; if (transport.playing) transport.start(items, song.tempo, i); }}>
+        <button class="tl" class:cur={i === current} style="flex-grow: {c.beats}" onclick={() => { picked = i; if (transport.playing) startLoop(i); }}>
           <span class="tl-sym"><Sym symbol={infoOf(c.ref).symbol} /></span>
           <span class="tl-scale" class:outside={ch?.outsideTheBox}>{ch ? pretty(ch.name) : '—'}</span>
           {#if i === current && transport.playing}<span class="beat" style="width: {((transport.beat + 1) / c.beats) * 100}%"></span>{/if}
@@ -121,7 +154,7 @@
             </div>
           {/if}
         </div>
-        <div class="board scroll-x">
+        <div class="board">
           <Fretboard tuning={app.tuning} frets={app.settings.frets} marks={fretMarks} leftHanded={app.settings.leftHanded} window={windowRange} />
         </div>
         <div class="neck-tools">
@@ -149,7 +182,11 @@
         <ul>
           {#each options[current] ?? [] as o, oi}
             {@const on = (choice[item.id] ?? 0) === oi}
-            <li>
+            <li class="opt-li">
+              <button class="hear" class:playing={previewing === oi} onclick={() => { choice[item.id] = oi; preview(oi, o); }}
+                aria-label="Hear {o.name} over this chord" title="Hear it over the chord" data-testid="hear-scale">
+                <Icon name="play" size={13} />
+              </button>
               <button class="opt" class:on onclick={() => (choice[item.id] = oi)}>
                 <span class="opt-title">{pretty(o.name)}
                   {#if o.inKey}<span class="badge" style="--c: var(--hf-T)">in key</span>{/if}
@@ -174,8 +211,8 @@
   .bpm { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
   .bpm input { width: 3.6rem; height: 32px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); text-align: center; font: inherit; }
   .empty { padding: 1.4rem; display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-start; }
-  .timeline { display: flex; gap: 0.35rem; padding: 0.6rem; }
-  .tl { position: relative; flex-basis: 6rem; min-width: 6rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; padding: 0.45rem 0.7rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; overflow: hidden; text-align: left; transition: border-color 0.15s, background 0.2s; }
+  .timeline { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.6rem; }
+  .tl { position: relative; flex-basis: 6rem; min-width: 5.2rem; max-width: 14rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; padding: 0.45rem 0.7rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; overflow: hidden; text-align: left; transition: border-color 0.15s, background 0.2s; }
   .tl.cur { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
   .tl-sym { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
   .tl-scale { font-size: 0.68rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -203,6 +240,13 @@
   .choices { padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.7rem; position: sticky; top: 5rem; }
   .presets { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .choices ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+  .opt-li { position: relative; }
+  .hear { position: absolute; top: 0.55rem; right: 0.55rem; z-index: 1; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); display: grid; place-items: center; cursor: pointer; transition: transform 0.15s var(--ease), background 0.2s; }
+  .hear:hover { transform: scale(1.08); border-color: var(--accent); }
+  .hear.playing { background: var(--brand-grad); border-color: transparent; color: #12060c; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.12); } }
+  .line { font-size: 0.85rem; font-weight: 600; }
+  .opt { padding-right: 2.8rem !important; }
   .opt { width: 100%; text-align: left; border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px; padding: 0.6rem 0.8rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.15rem; transition: border-color 0.15s; }
   .opt:hover { border-color: var(--border-strong); }
   .opt.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); }

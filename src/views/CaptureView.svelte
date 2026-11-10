@@ -167,7 +167,7 @@
 
     {#if app.settings.instrument === 'guitar' || app.settings.instrument === 'bass'}
       <div class="board scroll-x" data-testid="fretboard">
-        <Fretboard tuning={app.tuning} frets={app.settings.frets} marks={fretMarks} leftHanded={app.settings.leftHanded}
+        <Fretboard tuning={app.tuning} frets={app.settings.frets} marks={fretMarks} leftHanded={app.settings.leftHanded} minWidth={app.settings.frets * 40}
           muted={new Set(frets.flatMap((f, s) => (f < 0 ? [s] : [])))} onToggle={toggleFret} onMute={muteString} />
       </div>
     {/if}

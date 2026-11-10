@@ -1,7 +1,7 @@
 // Web Audio engine: plucked guitar/bass, electric-piano keys, strums, arpeggios and a song scheduler.
 import { midiToFreq } from '../core/notes';
 
-export type Timbre = 'guitar' | 'bass' | 'keys' | 'pad';
+export type Timbre = 'guitar' | 'bass' | 'keys' | 'pad' | 'lead';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -48,6 +48,14 @@ export function audio(): AudioContext {
 
 export const now = () => audio().currentTime;
 
+/** A gain node routed into the master chain (respects mute + reverb). Disconnect it to silence everything sent to it. */
+export function createBus(): GainNode {
+  const c = audio();
+  const g = c.createGain();
+  g.connect(master!);
+  return g;
+}
+
 /** Schedule one note. Returns nothing; voices clean themselves up. */
 export function voice(midi: number, t: number, timbre: Timbre = 'guitar', vel = 0.8, dur?: number, dest?: AudioNode) {
   const c = audio();
@@ -73,6 +81,34 @@ export function voice(midi: number, t: number, timbre: Timbre = 'guitar', vel = 
     out.gain.exponentialRampToValueAtTime(peak, t + 0.004);
     out.gain.exponentialRampToValueAtTime(peak * 0.35, t + 0.3);
     out.gain.exponentialRampToValueAtTime(0.0001, t + length);
+  } else if (timbre === 'lead') {
+    // Singing mono lead for demo solo lines: soft attack, short sustain, gentle vibrato
+    o1.type = 'sawtooth';
+    o2.type = 'triangle';
+    o1.frequency.setValueAtTime(f, t);
+    o2.frequency.setValueAtTime(f, t);
+    o2.detune.setValueAtTime(-7, t);
+    const lfo = c.createOscillator(), depth = c.createGain();
+    lfo.frequency.value = 5.5;
+    depth.gain.setValueAtTime(0, t);
+    depth.gain.linearRampToValueAtTime(f * 0.006, t + 0.25);
+    lfo.connect(depth);
+    depth.connect(o1.frequency);
+    depth.connect(o2.frequency);
+    lfo.start(t);
+    lp.Q.setValueAtTime(2, t);
+    lp.frequency.setValueAtTime(Math.min(9000, f * 6), t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(f * 2.5, 500), t + 0.25);
+    length = dur ?? 0.5;
+    g2.gain.value = 0.9;
+    const peak = 0.13 * vel;
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+    out.gain.exponentialRampToValueAtTime(peak * 0.7, t + 0.12);
+    out.gain.setValueAtTime(peak * 0.7, t + Math.max(0.13, length - 0.06));
+    out.gain.exponentialRampToValueAtTime(0.0001, t + length + 0.12);
+    length += 0.12;
+    lfo.stop(t + length + 0.05);
   } else if (timbre === 'pad') {
     o1.type = 'sawtooth';
     o2.type = 'sawtooth';
@@ -170,6 +206,8 @@ export interface PlaybackOptions {
   onChord?: (index: number) => void;
   onBeat?: (index: number, beat: number) => void;
   onEnd?: () => void;
+  /** extra voice (e.g. a demo solo line) scheduled with each chord: start time, seconds per beat, output bus */
+  lead?: (index: number, start: number, spb: number, bus: AudioNode) => void;
 }
 
 /** Plays a chord sequence with a lookahead scheduler. Returns a stop function. */
@@ -191,6 +229,7 @@ export function playSequence(chords: ScheduledChord[], opts: PlaybackOptions): (
   const scheduleChord = (i: number, start: number) => {
     const ch = chords[i];
     at(start, () => opts.onChord?.(i));
+    opts.lead?.(i, start, spb, bus);
     for (let b = 0; b < ch.beats; b++) {
       const bt = start + b * spb;
       at(bt, () => opts.onBeat?.(i, b));

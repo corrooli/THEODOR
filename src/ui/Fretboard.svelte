@@ -12,6 +12,7 @@
     onMute,
     pings = new Set<string>(),
     window: fretWindow = null,
+    minWidth = 0,
   }: {
     tuning: number[];
     frets?: number;
@@ -23,6 +24,8 @@
     pings?: Set<string>;
     /** highlight a fret range [from, to] (position lock) */
     window?: [number, number] | null;
+    /** below this width (px) the board stops shrinking and the parent scrolls instead */
+    minWidth?: number;
   } = $props();
 
   const ROW = 34;
@@ -54,7 +57,7 @@
 </script>
 
 <div class="board-wrap scroll-x">
-  <svg class="board" viewBox="0 0 {W} {H}" width={W} height={H} role="group" aria-label="Fretboard">
+  <svg class="board" viewBox="0 0 {W} {H}" style="min-width: {minWidth}px" role="group" aria-label="Fretboard">
     <defs>
       <linearGradient id="fb-wood" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="var(--wood-1)" />
@@ -150,7 +153,7 @@
 
 <style>
   .board-wrap { width: 100%; padding: 4px 2px 6px; }
-  .board { display: block; margin: 0 auto; user-select: none; -webkit-user-select: none; max-width: none; }
+  .board { display: block; width: 100%; height: auto; margin: 0 auto; user-select: none; -webkit-user-select: none; }
   .fretnum { font-size: 10px; fill: var(--muted); font-family: var(--font-ui); font-weight: 600; letter-spacing: 0.04em; }
   .cell { cursor: pointer; }
   .cell:focus { outline: none; }

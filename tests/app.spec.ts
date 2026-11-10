@@ -132,3 +132,20 @@ test('song: opening a v1 share link imports the song', async ({ page }) => {
   await expect(page.getByTestId('chord-block').first()).toBeVisible();
   await expect(page.getByTestId('song-title')).toHaveValue('Frozen');
 });
+
+test('solo: fretboard fits without horizontal scroll; preview + solo line play', async ({ page }) => {
+  await nav(page, 'song');
+  await page.locator('.library').getByText('Autumn-ish').click();
+  await nav(page, 'solo');
+  const neck = page.locator('.neck div.board');
+  const overflow = await neck.evaluate(el => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await page.getByTestId('hear-scale').nth(1).click();
+  await expect(page.getByTestId('hear-scale').nth(1)).toHaveClass(/playing/);
+  await page.getByTestId('solo-play').click();
+  await page.waitForTimeout(1200);
+  await expect(page.locator('.tl.cur')).toHaveCount(1);
+  await page.getByTestId('solo-line').uncheck();
+  await page.getByTestId('solo-play').click();
+});

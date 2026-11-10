@@ -6,6 +6,11 @@ import { playSequence, type PlaybackOptions } from './audio';
 import { chordMidis, instrumentTimbre } from './helpers';
 import { app } from './state.svelte';
 import type { SongChordItem } from './song';
+import { makeLick } from '../core/licks';
+import { LEAD_HI, LEAD_LO, scheduleLine, stopScalePreview } from './soloDemo';
+
+/** What the demo solo line should play over chord i. */
+export type LeadSpec = (i: number) => { scale: number[]; chord: number[]; guides: number[]; target?: number[] } | null;
 
 export type Feel = PlaybackOptions['feel'];
 
@@ -18,8 +23,9 @@ class Transport {
   feel = $state<Feel>('strum');
   private stopFn: (() => void) | null = null;
 
-  start(items: SongChordItem[], bpm: number, from = 0) {
+  start(items: SongChordItem[], bpm: number, from = 0, lead?: LeadSpec) {
     this.stop();
+    stopScalePreview();
     if (!items.length) return;
     const seq = items.slice(from);
     const pad = this.feel === 'pad';
@@ -31,6 +37,8 @@ class Transport {
         beats: it.beats,
       };
     });
+    let lastNote: number | undefined;
+    let seed = Math.floor(Math.random() * 1000);
     this.playing = true;
     this.stopFn = playSequence(chords, {
       bpm, loop: this.loop, metronome: this.metronome, feel: this.feel,
@@ -39,6 +47,13 @@ class Transport {
       onChord: i => { this.index = i + from; app.playingId = items[i + from]?.id ?? null; },
       onBeat: (_i, b) => { this.beat = b; },
       onEnd: () => this.stop(),
+      lead: lead ? (i, start, spb, bus) => {
+        const spec = lead(i + from);
+        if (!spec) return;
+        const { notes, last } = makeLick({ ...spec, beats: seq[i].beats, from: lastNote, lo: LEAD_LO, hi: LEAD_HI, seed: ++seed * 7919 });
+        lastNote = last;
+        scheduleLine(notes, start, spb, bus);
+      } : undefined,
     });
   }
 
