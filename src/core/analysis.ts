@@ -170,7 +170,7 @@ export function analyzeSong(chords: SongChord[], key: Key): ChordAnalysis[] {
       const fnMap = key.mode === 'major' ? FN_MAJOR : FN_MINOR;
       const fn = fnMap[deg] ?? '?';
       out.push({ ...base, fn, role: 'diatonic', level: 'basic',
-        why: `${roman} in ${keyNameStr} — a ${FN_WORD[fn]} chord${fn === 'T' ? ' that feels settled' : fn === 'S' ? ' that moves away from home' : fn === 'D' ? ' that wants to resolve home' : ''}.` });
+        why: `${roman} in ${keyNameStr} — ${fn === 'T' ? 'a home chord: it feels settled' : fn === 'S' ? 'an away chord: it moves away from home' : fn === 'D' ? 'a tension chord: it wants to resolve home' : `a ${FN_WORD[fn]} chord`}.` });
       return;
     }
 
