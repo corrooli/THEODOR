@@ -149,3 +149,37 @@ test('solo: fretboard fits without horizontal scroll; preview + solo line play',
   await page.getByTestId('solo-line').uncheck();
   await page.getByTestId('solo-play').click();
 });
+
+test('identify: inspector shows inversions, voicings and transposes', async ({ page }) => {
+  await page.getByTestId('quick-input').fill('x32010');
+  await page.getByTestId('quick-input').press('Enter');
+  await page.getByTestId('inspect').click();
+  await expect(page.getByTestId('inspect-symbol')).toHaveText('C');
+  // pick E as bass -> first inversion
+  await page.getByTestId('bass-options').getByRole('button', { name: /^E/ }).click();
+  await expect(page.getByTestId('inspect-symbol')).toHaveText('C/E');
+  await expect(page.getByTestId('chord-result')).toContainText('1st inversion');
+  // transpose up a semitone moves root and bass
+  await page.getByTestId('transpose-up').click();
+  await expect(page.getByTestId('inspect-symbol')).toHaveText(/C♯\/E♯|D♭\/F/);
+  await page.getByTestId('transpose-down').click();
+  await page.getByTestId('transpose-down').click();
+  await expect(page.getByTestId('inspect-symbol')).toHaveText('B/D♯');
+  await page.getByTestId('inspect-close').click();
+  await expect(page.getByTestId('chord-result').locator('h2')).toHaveText('C');
+});
+
+test('identify: transpose shifts the entered notes', async ({ page }) => {
+  await page.getByTestId('quick-input').fill('C E G');
+  await page.getByTestId('quick-input').press('Enter');
+  await page.getByTestId('transpose-up').click();
+  await page.getByTestId('transpose-up').click();
+  await expect(page.getByTestId('chord-result').locator('h2')).toHaveText('D');
+});
+
+test('identify: computer keyboard plays notes', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'no hardware keyboard on phones');
+  await page.locator('h1').click();
+  for (const k of ['a', 'd', 'g']) await page.keyboard.press(k);
+  await expect(page.getByTestId('chord-result').locator('h2')).toHaveText('C');
+});

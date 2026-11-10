@@ -74,6 +74,8 @@
       if (app.lookupOpen) app.lookupOpen = false;
       else if (app.settingsOpen) app.settingsOpen = false;
       else if (app.detail) app.detail = null;
+      else if (app.overlayChord) app.overlayChord = null;
+      else if (app.overlayScale) app.overlayScale = null;
       else return;
       e.preventDefault();
       return;
