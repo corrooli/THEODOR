@@ -323,7 +323,7 @@ export function detectPatterns(chords: SongChord[], key: Key): PatternHit[] {
   const infos = chords.map(c => infoOf(c.ref));
   const hits: PatternHit[] = [];
   const covered = new Map<string, number[]>(); // pattern name -> starts (avoid overlapping duplicates of smaller patterns)
-  const used: boolean[][] = [];
+  const used: number[][] = [];
   for (const p of PATTERNS) {
     if (!p.modes.includes(key.mode)) continue;
     for (let start = 0; start + p.seq.length <= infos.length; start++) {
