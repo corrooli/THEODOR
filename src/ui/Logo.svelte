@@ -5,7 +5,7 @@
 <span class="logo" style="--s: {size}px">
   <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
     <defs>
-      <linearGradient id="lg-brand" x1="0" y1="0" x2="1" y2="1">
+      <linearGradient id="lg-brand" gradientUnits="userSpaceOnUse" x1="9" y1="25" x2="27" y2="5">
         <stop offset="0" stop-color="#ffb347" />
         <stop offset="0.5" stop-color="#ff5e7e" />
         <stop offset="1" stop-color="#9b6bff" />
