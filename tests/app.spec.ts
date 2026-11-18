@@ -183,3 +183,14 @@ test('identify: computer keyboard plays notes', async ({ page, isMobile }) => {
   for (const k of ['a', 'd', 'g']) await page.keyboard.press(k);
   await expect(page.getByTestId('chord-result').locator('h2')).toHaveText('C');
 });
+
+test('identify: scale run mode allows several notes per string', async ({ page }) => {
+  await page.getByTestId('mode-scale').click();
+  // A minor pentatonic, low e string (index 5): 5,8 ; A string (4): 5,7
+  for (const sf of ['5:5', '5:8', '4:5', '4:7']) await page.locator(`[data-sf="${sf}"]`).click();
+  await expect(page.getByTestId('scale-result')).toContainText('Minor Pentatonic');
+  await expect(page.getByTestId('chord-result')).toBeVisible();
+  // switching back keeps one note per string
+  await page.getByTestId('mode-chord').click();
+  await expect(page.getByTestId('scale-result')).not.toContainText('Play two or more notes');
+});

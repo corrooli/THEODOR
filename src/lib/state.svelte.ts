@@ -70,7 +70,8 @@ class AppState {
   /** chord being played back (item id) */
   playingId = $state<string | null>(null);
   /** Identify view input: fret per string (-1 = muted) and piano keys */
-  capture = $state<{ frets: number[]; keys: number[] }>({ frets: [], keys: [] });
+  /** frets: one per string (chord entry). spots: any number of "string:fret" positions per string (scale entry, when multi is on). */
+  capture = $state<{ frets: number[]; keys: number[]; multi: boolean; spots: string[] }>({ frets: [], keys: [], multi: false, spots: [] });
   /** Scale shown on the Identify neck (from lookup "show on neck") */
   overlayScale = $state<ScaleRef | null>(null);
   /** Chord shown on the Identify neck (from lookup "show on neck") */

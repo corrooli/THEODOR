@@ -39,7 +39,7 @@
 
   function showOnNeck() {
     if (scale) { app.overlayScale = scale.ref; app.overlayChord = null; }
-    else if (chord) { app.overlayChord = chord.ref; app.overlayScale = null; app.capture = { frets: [], keys: [] }; }
+    else if (chord) { app.overlayChord = chord.ref; app.overlayScale = null; app.capture = { frets: [], keys: [], multi: false, spots: [] }; }
     go('capture');
     close();
   }

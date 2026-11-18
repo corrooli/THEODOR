@@ -19,7 +19,11 @@
 
   const n = $derived(app.tuning.length);
   const frets = $derived(app.capture.frets.length === n ? app.capture.frets : Array(n).fill(-1));
-  const midis = $derived([...new Set([...fretsToMidis(frets), ...app.capture.keys])].sort((a, b) => a - b));
+  const multi = $derived(app.capture.multi);
+  // Chord entry: one fret per string. Scale entry: any number of frets per string.
+  const spots = $derived(new Set(multi ? app.capture.spots : frets.flatMap((f, s) => (f >= 0 ? [fk(s, f)] : []))));
+  const spotMidis = $derived(multi ? app.capture.spots.map(sp => { const [s, f] = sp.split(':').map(Number); return app.tuning[s] + f; }) : fretsToMidis(frets));
+  const midis = $derived([...new Set([...spotMidis, ...app.capture.keys])].sort((a, b) => a - b));
   const pcs = $derived(new Set(midis.map(mod12)));
   const matches = $derived(midis.length >= 2 ? identifyMidi(midis).slice(0, 12) : []);
   const best = $derived(matches[0] ? chordInfo(matches[0].root, matches[0].qi, matches[0].bass) : null);
@@ -57,7 +61,8 @@
   function canTranspose(d: number) {
     if (overlayChord) return true;
     if (!midis.length) return false;
-    if (frets.some(f => f >= 0 && (f + d < 0 || f + d > app.settings.frets))) return false;
+    if (multi ? app.capture.spots.some(sp => { const f = +sp.split(':')[1] + d; return f < 0 || f > app.settings.frets; })
+      : frets.some(f => f >= 0 && (f + d < 0 || f + d > app.settings.frets))) return false;
     return app.capture.keys.every(m => m + d >= 21 && m + d <= 108);
   }
   function transpose(d: number) {
@@ -67,7 +72,12 @@
       inspect({ root: mod12(r.root + d), q: r.q, ...(r.bass !== undefined ? { bass: mod12(r.bass + d) } : {}), ...(d < 0 ? { pref: 'flat' as const } : {}) });
       return;
     }
-    app.capture = { frets: frets.map(f => (f >= 0 ? f + d : f)), keys: app.capture.keys.map(m => m + d) };
+    app.capture = {
+      multi,
+      frets: frets.map(f => (f >= 0 ? f + d : f)),
+      spots: app.capture.spots.map(sp => { const [s, f] = sp.split(':'); return `${s}:${+f + d}`; }),
+      keys: app.capture.keys.map(m => m + d),
+    };
     strumAll();
   }
 
@@ -92,11 +102,11 @@
     if (overlayScale) {
       const m = scaleFretMarks(overlayScale, best);
       // keep played notes visible as solid dots on top of the scale
-      frets.forEach((f, s) => { if (f >= 0) { const prev = m.get(fk(s, f)); m.set(fk(s, f), { ...(prev ?? { fn: 'none', text: '' }), kind: 'on', text: prev?.text ?? '' }); } });
+      for (const key of spots) { const prev = m.get(key); m.set(key, { ...(prev ?? { fn: 'none', text: '' }), kind: 'on', text: prev?.text ?? '' }); }
       return m;
     }
     if (overlayChord) return chordFretMarks(overlayChord, inspectVoicing?.frets ?? null, overlayChord.pcs, true);
-    return chordFretMarks(best, frets, pcs, true);
+    return chordFretMarks(best, multi ? spots : frets, pcs, true);
   });
   const keyMarks = $derived.by(() => {
     if (overlayScale) return scaleKeyMarks(overlayScale, best, 36, 84);
@@ -106,12 +116,20 @@
 
   function toggleFret(s: number, f: number) {
     if (app.overlayChord) { app.overlayChord = null; }
+    if (multi) {
+      const k = fk(s, f);
+      const had = app.capture.spots.includes(k);
+      app.capture.spots = had ? app.capture.spots.filter(x => x !== k) : [...app.capture.spots, k];
+      if (!had) playNote(app.tuning[s] + f, instrumentTimbre());
+      return;
+    }
     const next = [...frets];
     next[s] = next[s] === f ? -1 : f;
     app.capture.frets = next;
     if (next[s] >= 0) playNote(app.tuning[s] + f, instrumentTimbre());
   }
   function muteString(s: number) {
+    if (multi) { app.capture.spots = app.capture.spots.filter(sp => !sp.startsWith(s + ':')); return; }
     const next = [...frets];
     next[s] = -1;
     app.capture.frets = next;
@@ -122,8 +140,18 @@
     app.capture.keys = k.includes(m) ? k.filter(x => x !== m) : [...k, m];
     if (!k.includes(m)) playNote(m, 'keys');
   }
+  /** Switch between chord entry (one note per string) and scale entry (many). Keeps what is already entered. */
+  function setMulti(on: boolean) {
+    if (on === multi) return;
+    if (on) app.capture = { ...app.capture, multi: true, spots: frets.flatMap((f, s) => (f >= 0 ? [fk(s, f)] : [])) };
+    else {
+      const next: number[] = Array(n).fill(-1);
+      for (const sp of app.capture.spots) { const [s, f] = sp.split(':').map(Number); if (next[s] < 0 || f < next[s]) next[s] = f; }
+      app.capture = { ...app.capture, multi: false, frets: next };
+    }
+  }
   function clear() {
-    app.capture = { frets: [], keys: [] };
+    app.capture = { ...app.capture, frets: [], keys: [], spots: [] };
     app.overlayScale = null;
     app.overlayChord = null;
   }
@@ -139,9 +167,9 @@
     const q = quick.trim();
     if (!q) return;
     const tab = parseTab(q, n);
-    if (tab) { app.capture = { frets: tab, keys: [] }; strum(fretsToMidis(tab), instrumentTimbre()); quick = ''; return; }
+    if (tab) { app.capture = { frets: tab, keys: [], multi: false, spots: [] }; strum(fretsToMidis(tab), instrumentTimbre()); quick = ''; return; }
     const notes = parseNoteList(q);
-    if (notes) { app.capture = { frets: [], keys: notes }; strum(notes, 'keys'); quick = ''; return; }
+    if (notes) { app.capture = { ...app.capture, frets: [], spots: [], keys: notes }; strum(notes, 'keys'); quick = ''; return; }
     app.notify('Type a tab like x32010 or notes like C E G Bb');
   }
 
@@ -170,7 +198,7 @@
     const cmd = st & 0xf0;
     if (cmd === 0x90 && vel > 0) {
       // a new chord starts when every key was released
-      if (fresh) { app.capture = { frets: [], keys: [] }; fresh = false; }
+      if (fresh) { app.capture = { ...app.capture, frets: [], spots: [], keys: [] }; fresh = false; }
       held.add(note);
       if (!app.capture.keys.includes(note)) app.capture.keys = [...app.capture.keys, note];
       playNote(note, 'keys', vel / 127);
@@ -216,9 +244,16 @@
     {/if}
 
     {#if app.settings.instrument === 'guitar' || app.settings.instrument === 'bass'}
+      <div class="entry">
+        <div class="seg sm" role="group" aria-label="Entry mode">
+          <button class:on={!multi} onclick={() => setMulti(false)} title="One note per string, like a chord shape" data-testid="mode-chord">Chord shape</button>
+          <button class:on={multi} onclick={() => setMulti(true)} title="Any number of notes per string, like a scale run" data-testid="mode-scale">Scale run</button>
+        </div>
+        <small class="muted">{multi ? 'Tap any frets, several per string. Click a string name to clear it.' : 'One note per string. Switch to Scale run for more.'}</small>
+      </div>
       <div class="board scroll-x" data-testid="fretboard">
         <Fretboard tuning={app.tuning} frets={app.settings.frets} marks={fretMarks} leftHanded={app.settings.leftHanded} minWidth={app.settings.frets * 40}
-          muted={new Set(frets.flatMap((f, s) => (f < 0 ? [s] : [])))} onToggle={toggleFret} onMute={muteString} />
+          muted={multi ? new Set<number>() : new Set(frets.flatMap((f, s) => (f < 0 ? [s] : [])))} onToggle={toggleFret} onMute={muteString} />
       </div>
     {/if}
     {#if app.settings.showPiano}
@@ -380,6 +415,7 @@
   .overlay-bar { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem 0.45rem 0.9rem; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); font-size: 0.88rem; flex-wrap: wrap; }
   .seg.sm button { padding: 0.15rem 0.5rem; display: inline-flex; align-items: center; }
   .sp { flex: 1; }
+  .entry { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
   .board, .keys { margin: 0 -0.4rem; padding: 0 0.4rem; }
   .keys { display: flex; justify-content: center; }
   .toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

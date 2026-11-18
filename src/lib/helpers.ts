@@ -109,12 +109,12 @@ export function labelFor(pc: number, info: ChordInfo | null): ToneLabel {
 const shown = (l: ToneLabel) => (app.settings.labels === 'intervals' && l.label && l.label !== 'bass' ? (l.label === '1' ? 'R' : l.label) : l.note);
 
 /** Marks for chord display: `frets` solid, chord tones elsewhere as ghosts. */
-export function chordFretMarks(info: ChordInfo | null, frets: number[] | null, pcs: Set<number>, ghosts = true, tuning = app.tuning, maxFret = app.settings.frets): FretMarks {
+export function chordFretMarks(info: ChordInfo | null, frets: number[] | Set<string> | null, pcs: Set<number>, ghosts = true, tuning = app.tuning, maxFret = app.settings.frets): FretMarks {
   const m: FretMarks = new Map();
   tuning.forEach((open, s) => {
     for (let f = 0; f <= maxFret; f++) {
       const pc = (open + f) % 12;
-      const on = frets?.[s] === f;
+      const on = frets instanceof Set ? frets.has(fk(s, f)) : frets?.[s] === f;
       if (!on && !(ghosts && pcs.has(pc))) continue;
       const l = labelFor(pc, info);
       m.set(fk(s, f), { kind: on ? 'on' : 'ghost', fn: l.fn, text: shown(l), title: l.full ? `${l.note} · ${l.full}` : l.note });

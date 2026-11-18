@@ -47,7 +47,7 @@
         if (best) {
           const ci = chordInfo(best.root, best.qi, best.bass);
           rows.push({ id: 'n', title: `These notes = ${ci.symbol}`, symbol: ci.symbol, sub: `${best.type === 'exact' ? 'Exact match' : best.type === 'slash' ? 'Slash chord' : 'Incomplete: missing ' + best.missReq.join(', ')} · open in Identify for all matches`, tag: 'Reverse chord', tagColor: 'var(--fn-third)',
-            run: () => { app.capture = { frets: [], keys: i.midis }; app.overlayChord = null; app.overlayScale = null; go('capture'); strum(i.midis, 'keys'); close(); } });
+            run: () => { app.capture = { frets: [], keys: i.midis, multi: false, spots: [] }; app.overlayChord = null; app.overlayScale = null; go('capture'); strum(i.midis, 'keys'); close(); } });
         }
         if (sc) {
           const info = scaleInfo(sc.root, sc.si);
@@ -61,7 +61,7 @@
         const best = midis.length >= 2 ? identifyMidi(midis)[0] : undefined;
         const name = best ? chordInfo(best.root, best.qi, best.bass).symbol : 'shape';
         return [{ id: 't', title: `Guitar shape → ${name}`, symbol: best ? name : undefined, sub: 'Put it on the fretboard in Identify', tag: 'Tab', tagColor: 'var(--fn-ext)',
-          run: () => { app.capture = { frets: i.frets, keys: [] }; app.overlayChord = null; app.overlayScale = null; go('capture'); strum(midis, 'guitar'); close(); } }];
+          run: () => { app.capture = { frets: i.frets, keys: [], multi: false, spots: [] }; app.overlayChord = null; app.overlayScale = null; go('capture'); strum(midis, 'guitar'); close(); } }];
       }
       case 'progression': {
         const k = detectKey(i.chords.map(ref => ({ ref, beats: 4 })))[0];
