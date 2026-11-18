@@ -43,8 +43,8 @@
   const fretMarks = $derived(scale ? scaleFretMarks(scale, chord, guides, windowRange) : new Map());
   const keyMarks = $derived(scale ? scaleKeyMarks(scale, chord, 48, 84) : new Map());
 
-  // Demo solo line over the loop, using each chord's chosen scale and leading into the next chord
-  let soloLine = $state(true);
+  // Optional (off by default) demo solo line over the loop, using each chord's chosen scale and leading into the next chord
+  let soloLine = $state(false);
   const leadSpec = (i: number) => {
     const c = items[i];
     const ch = chosen(i);
@@ -103,7 +103,7 @@
     <div>
       <div class="eyebrow">Solo · what to play over the changes</div>
       <h1>{song.title} <span class="muted key">in {keyName(key)}</span></h1>
-      <p class="muted">Loop the song (with a demo solo line) and see the right notes for each chord. Hit ▶ on any scale to hear it over the chord. Big coloured dots are chord tones, rings are guide tones (3rds & 7ths) — land on them.</p>
+      <p class="muted">Loop the song (tick Solo line to hear a demo line) and see the right notes for each chord. Hit ▶ on any scale to hear it over the chord. Big coloured dots are chord tones, rings are guide tones (3rds & 7ths) — land on them.</p>
     </div>
     <div class="transport">
       <button class="btn" class:primary={!transport.playing} onclick={togglePlay} disabled={!items.length} data-testid="solo-play">

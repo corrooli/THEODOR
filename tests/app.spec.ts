@@ -143,6 +143,9 @@ test('solo: fretboard fits without horizontal scroll; preview + solo line play',
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.getByTestId('hear-scale').nth(1).click();
   await expect(page.getByTestId('hear-scale').nth(1)).toHaveClass(/playing/);
+  // solo line is opt-in so you can play over the backing alone
+  await expect(page.getByTestId('solo-line')).not.toBeChecked();
+  await page.getByTestId('solo-line').check();
   await page.getByTestId('solo-play').click();
   await page.waitForTimeout(1200);
   await expect(page.locator('.tl.cur')).toHaveCount(1);

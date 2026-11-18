@@ -1,7 +1,6 @@
-// Hear a scale over a chord: backing chord + generated demo line.
+// Hear a scale over a chord: backing chord + the scale played up and down.
 import { infoOf, type ChordRef } from '../core/chords';
-import { guideTones } from '../core/chordScales';
-import { makeLick, type LickNote } from '../core/licks';
+import type { LickNote } from '../core/licks';
 import type { ScaleInfo } from '../core/scales';
 import { pianoVoicing } from '../core/voicings';
 import { audio, createBus, now, strum, voice } from './audio';
@@ -15,9 +14,20 @@ export function scheduleLine(notes: LickNote[], start: number, spb: number, dest
   for (const n of notes) voice(n.midi, start + n.at * spb, 'lead', n.vel, Math.max(0.08, n.dur * spb), dest);
 }
 
+/** Plain scale, root up one octave and back down. No randomness, so you hear the scale itself. */
+export function scaleUpDown(scale: ScaleInfo, beats: number): LickNote[] {
+  const semis = scale.scale.tones.map(t => t.semi);
+  let root = LEAD_LO + ((scale.root - LEAD_LO) % 12 + 12) % 12;
+  if (root + 12 > LEAD_HI) root -= 12;
+  const up = [...semis, 12].map(x => root + x);
+  const line = [...up, ...up.slice(0, -1).reverse()];
+  const step = Math.min(0.5, beats / line.length);
+  return line.map((midi, i) => ({ midi, at: i * step, dur: step * 0.95, vel: i === 0 || i === up.length - 1 ? 0.85 : 0.7 }));
+}
+
 let stopPreview: (() => void) | null = null;
 
-/** Two bars: chord held underneath, a run through the scale, then a phrase landing on chord tones. */
+/** Two bars: chord held underneath, scale played up and down over it. */
 export function previewScaleOverChord(chord: ChordRef, scale: ScaleInfo, bpm = app.song.tempo): () => void {
   stopPreview?.();
   const c = audio();
@@ -31,11 +41,7 @@ export function previewScaleOverChord(chord: ChordRef, scale: ScaleInfo, bpm = a
     strum(backing, 'keys', { at: t0 + b * spb, vel: 0.42, dest: bus });
     voice(36 + (ci.bass % 12), t0 + b * spb, 'bass', 0.75, spb * 3.6, bus);
   }
-  const { notes } = makeLick({
-    scale: [...scale.pcs], chord: [...ci.pcs], guides: guideTones(chord), beats, run: true,
-    lo: LEAD_LO, hi: LEAD_HI, seed: Math.floor(Math.random() * 1e9),
-  });
-  scheduleLine(notes, t0, spb, bus);
+  scheduleLine(scaleUpDown(scale, beats), t0, spb, bus);
   const stop = () => {
     bus.gain.setTargetAtTime(0, c.currentTime, 0.03);
     setTimeout(() => bus.disconnect(), 200);
